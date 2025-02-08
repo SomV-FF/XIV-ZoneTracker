@@ -1,17 +1,22 @@
-﻿using System;
+using System;
 using System.Numerics;
 using Dalamud.Interface.Utility;
 using Dalamud.Interface.Utility.Raii;
 using Dalamud.Interface.Windowing;
+using FFXIVClientStructs.FFXIV.Client.UI;
 using ImGuiNET;
 using Lumina.Excel.Sheets;
+using ZoneTracker;
 
-namespace SamplePlugin.Windows;
+
+namespace ZoneTracker.Windows;
 
 public class MainWindow : Window, IDisposable
 {
     private string GoatImagePath;
     private Plugin Plugin;
+
+    internal static Vector2 ConvertWorldXZToMap(Vector2 coords, Map map) => Dalamud.Utility.MapUtil.WorldToMap(coords, map.OffsetX, map.OffsetY, map.SizeFactor);
 
     // We give this window a hidden ID using ##
     // So that the user will see "My Amazing Window" as window title,
@@ -54,25 +59,8 @@ public class MainWindow : Window, IDisposable
             // Check if this child is drawing
             if (child.Success)
             {
-                ImGui.TextUnformatted("Have a goat:");
-                var goatImage = Plugin.TextureProvider.GetFromFile(GoatImagePath).GetWrapOrDefault();
-                if (goatImage != null)
-                {
-                    using (ImRaii.PushIndent(55f))
-                    {
-                        ImGui.Image(goatImage.ImGuiHandle, new Vector2(goatImage.Width, goatImage.Height));
-                    }
-                }
-                else
-                {
-                    ImGui.TextUnformatted("Image not found.");
-                }
-
-                ImGuiHelpers.ScaledDummy(20.0f);
-
                 // Example for other services that Dalamud provides.
                 // ClientState provides a wrapper filled with information about the local player object and client.
-
                 var localPlayer = Plugin.ClientState.LocalPlayer;
                 if (localPlayer == null)
                 {
@@ -89,17 +77,24 @@ public class MainWindow : Window, IDisposable
                 // ExtractText() should be the preferred method to read Lumina SeStrings,
                 // as ToString does not provide the actual text values, instead gives an encoded macro string.
                 ImGui.TextUnformatted($"Our current job is ({localPlayer.ClassJob.RowId}) \"{localPlayer.ClassJob.Value.Abbreviation.ExtractText()}\"");
-
-                // Example for quarrying Lumina directly, getting the name of our current area.
+                ImGui.TextUnformatted($"Our character name is John Final_Fantasy");//{localPlayer.Name}
                 var territoryId = Plugin.ClientState.TerritoryType;
                 if (Plugin.DataManager.GetExcelSheet<TerritoryType>().TryGetRow(territoryId, out var territoryRow))
                 {
-                    ImGui.TextUnformatted($"We are currently in ({territoryId}) \"{territoryRow.PlaceName.Value.Name.ExtractText()}\"");
+                    var map = territoryRow.Map.Value;
+                    Vector2 pos = new Vector2(localPlayer.Position.X, localPlayer.Position.Z);
+                    ImGui.TextUnformatted($"Our character position is {ConvertWorldXZToMap(pos, map)}");
+                    ImGui.TextUnformatted($"We are currently in ({territoryRow.PlaceName.Value.Name.ExtractText()})");
                 }
+                // Example for quarrying Lumina directly, getting the name of our current area.
                 else
                 {
                     ImGui.TextUnformatted("Invalid territory.");
                 }
+
+                //character objects
+                
+
             }
         }
     }
