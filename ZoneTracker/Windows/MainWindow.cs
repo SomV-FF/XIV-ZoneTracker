@@ -1,13 +1,32 @@
 using System;
+using System.Collections.Generic;
 using System.Numerics;
 using Dalamud.Interface.Utility;
 using Dalamud.Interface.Utility.Raii;
 using Dalamud.Interface.Windowing;
+using FFXIVClientStructs.FFXIV.Client.Game.Character;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using ImGuiNET;
 using Lumina.Excel.Sheets;
 using ZoneTracker;
+using ICharacter = Dalamud.Game.ClientState.Objects.Types.ICharacter;
 
+
+
+using Dalamud.Game.ClientState.Conditions;
+using Dalamud.Game.ClientState.Objects.Types;
+using ECommons.DalamudServices;
+using ECommons.GameFunctions;
+using System.Collections.Generic;
+using System.Linq;
+using System.Numerics;
+using FFXIVClientStructs.FFXIV.Client.Game.Control;
+using System;
+using Dalamud.Game.ClientState.Objects.Enums;
+using ECommons;
+using FFXIVClientStructs.FFXIV.Component.GUI;
+using ECommons.Throttlers;
+using FFXIVClientStructs.FFXIV.Client.Game.UI;
 
 namespace ZoneTracker.Windows;
 
@@ -15,9 +34,9 @@ public class MainWindow : Window, IDisposable
 {
     private string GoatImagePath;
     private Plugin Plugin;
-
     internal static Vector2 ConvertWorldXZToMap(Vector2 coords, Map map) => Dalamud.Utility.MapUtil.WorldToMap(coords, map.OffsetX, map.OffsetY, map.SizeFactor);
 
+    public List<ICharacter> CharacterList { get; private set; } = new List<ICharacter>();
     // We give this window a hidden ID using ##
     // So that the user will see "My Amazing Window" as window title,
     // but for ImGui the ID is "My Amazing Window##With a hidden ID"
@@ -38,6 +57,10 @@ public class MainWindow : Window, IDisposable
 
     public override void Draw()
     {
+        
+        //update known character list
+        Svc.Objects
+
         // Do not use .Text() or any other formatted function like TextWrapped(), or SetTooltip().
         // These expect formatting parameter if any part of the text contains a "%", which we can't
         // provide through our bindings, leading to a Crash to Desktop.
@@ -91,7 +114,8 @@ public class MainWindow : Window, IDisposable
                 {
                     ImGui.TextUnformatted("Invalid territory.");
                 }
-
+//                FFXIVClientStructs.FFXIV.Client.Game.GameMain.
+                
                 //character objects
                 
 

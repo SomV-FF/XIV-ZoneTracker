@@ -42,6 +42,7 @@ public sealed class Plugin : IDalamudPlugin
         {
             HelpMessage = "A useful message to display in /xlhelp"
         });
+        ECommonsMain.Init(pluginInterface, this);
 
         PluginInterface.UiBuilder.Draw += DrawUI;
 
