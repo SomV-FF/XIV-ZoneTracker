@@ -27,6 +27,10 @@ using ECommons;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using ECommons.Throttlers;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
+using ECommons.GameHelpers;
+using Dalamud.Game.ClientState.Objects.SubKinds;
+using ECommons.Automation;
+using System.Xml.Linq;
 
 namespace ZoneTracker.Windows;
 
@@ -34,9 +38,21 @@ public class MainWindow : Window, IDisposable
 {
     private string GoatImagePath;
     private Plugin Plugin;
-    internal static Vector2 ConvertWorldXZToMap(Vector2 coords, Map map) => Dalamud.Utility.MapUtil.WorldToMap(coords, map.OffsetX, map.OffsetY, map.SizeFactor);
 
-    public List<ICharacter> CharacterList { get; private set; } = new List<ICharacter>();
+    internal static unsafe float GetDistanceToPlayer(IGameObject gameObject) => GetDistanceToPlayer(gameObject.Position);
+
+    internal static unsafe float GetDistanceToPlayer(Vector3 v3) => Vector3.Distance(v3, Player.GameObject->Position);
+    internal static Vector2 ConvertWorldXZToMap(Vector2 coords, Lumina.Excel.Sheets.Map map) => Dalamud.Utility.MapUtil.WorldToMap(coords, map.OffsetX, map.OffsetY, map.SizeFactor);
+    internal static List<IGameObject>? GetObjectsByObjectKind(ObjectKind objectKind) => [.. Svc.Objects.OrderBy(GetDistanceToPlayer).Where(o => o.ObjectKind == objectKind)];
+
+
+    public unsafe bool IsPartOfQuestOrImportant(Dalamud.Game.ClientState.Objects.Types.IGameObject gameObject)
+    {
+        return ((FFXIVClientStructs.FFXIV.Client.Game.Object.GameObject*)(gameObject as ICharacter).Address)->NamePlateIconId is not 0;
+    }
+
+    public List<IGameObject> knownNPCs = new List<IGameObject>();
+    public List<string> talkedNames = new List<string>();
     // We give this window a hidden ID using ##
     // So that the user will see "My Amazing Window" as window title,
     // but for ImGui the ID is "My Amazing Window##With a hidden ID"
@@ -55,11 +71,39 @@ public class MainWindow : Window, IDisposable
 
     public void Dispose() { }
 
+
+    internal static unsafe void InteractWithObject(IGameObject? gameObject, bool face = true)
+    {
+        try
+        {
+            if (gameObject == null || !gameObject.IsTargetable)
+                return;
+//            if (face)
+                //Plugin.OverrideCamera.Face(gameObject.Position);
+            var gameObjectPointer = (FFXIVClientStructs.FFXIV.Client.Game.Object.GameObject*)gameObject.Address;
+            TargetSystem.Instance()->InteractWithObject(gameObjectPointer, false);
+        }
+        catch (Exception ex)
+        {
+            Svc.Log.Info($"InteractWithObject: Exception: {ex}");
+        }
+    }
+
+    public void MoveToPoint()
+    {
+        if (knownNPCs.Count > 0)
+        {
+            Chat.Instance.SendMessage($"/vnav moveto {knownNPCs[0].Position.X} {knownNPCs[0].Position.Y} {knownNPCs[0].Position.Z}");
+        }
+    }
+
     public override void Draw()
     {
-        
+
         //update known character list
-        Svc.Objects
+        List<IGameObject> obj = GetObjectsByObjectKind(ObjectKind.EventNpc);
+        if (obj == null) return;
+
 
         // Do not use .Text() or any other formatted function like TextWrapped(), or SetTooltip().
         // These expect formatting parameter if any part of the text contains a "%", which we can't
@@ -71,6 +115,60 @@ public class MainWindow : Window, IDisposable
         {
             Plugin.ToggleConfigUI();
         }
+
+        if(ImGui.Button("Interact with nearest character"))
+        {
+            foreach (IGameObject x in obj)
+            {
+                if (x.IsTargetable)
+                {
+                    InteractWithObject(x, false);
+                    break;
+                }
+            }
+        }
+
+        if (ImGui.Button("Clear known NPCs"))
+        {
+            knownNPCs.Clear();
+            talkedNames.Clear();
+        }
+
+        if (ImGui.Button("Move to point"))
+        {
+            MoveToPoint();
+        }
+
+        if(knownNPCs.Count > 0)
+        {
+            if (Vector3.Distance(Player.Position, knownNPCs[0].Position) < 3)
+            {
+                InteractWithObject(knownNPCs[0], false);
+                talkedNames.Add(knownNPCs[0].Name.ToString());
+                knownNPCs.Remove(knownNPCs[0]);
+                MoveToPoint();
+            }
+        }
+
+        ImGui.Spacing();
+        
+
+        using (var child = ImRaii.Child("CharacterList", new Vector2(500, 300), true))
+        {
+            foreach(IGameObject x in obj)
+            {
+                if (!knownNPCs.Contains(x) && !talkedNames.Contains(x.Name.ToString()))
+                {
+                    if (x.IsTargetable && !IsPartOfQuestOrImportant(x))
+                        knownNPCs.Add(x);
+                }
+            }
+            foreach (IGameObject x in knownNPCs)
+            {
+                ImGui.TextUnformatted(x.Name.ToString() + " " + GetDistanceToPlayer(x).ToString("#") + " yalms away");
+            }
+        }
+
 
         ImGui.Spacing();
 

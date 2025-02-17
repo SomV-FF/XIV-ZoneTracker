@@ -5,6 +5,7 @@ using System.IO;
 using Dalamud.Interface.Windowing;
 using Dalamud.Plugin.Services;
 using ZoneTracker.Windows;
+using ECommons;
 
 namespace ZoneTracker;
 
@@ -42,7 +43,7 @@ public sealed class Plugin : IDalamudPlugin
         {
             HelpMessage = "A useful message to display in /xlhelp"
         });
-        ECommonsMain.Init(pluginInterface, this);
+        ECommonsMain.Init(PluginInterface, this, Module.All);
 
         PluginInterface.UiBuilder.Draw += DrawUI;
 
@@ -65,7 +66,7 @@ public sealed class Plugin : IDalamudPlugin
 
         ConfigWindow.Dispose();
         MainWindow.Dispose();
-
+        ECommonsMain.Dispose();
         CommandManager.RemoveHandler(CommandName);
     }
 
