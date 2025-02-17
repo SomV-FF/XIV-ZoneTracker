@@ -31,6 +31,13 @@ using ECommons.GameHelpers;
 using Dalamud.Game.ClientState.Objects.SubKinds;
 using ECommons.Automation;
 using System.Xml.Linq;
+using ECommons.UIHelpers;
+
+using ECommons.Automation.UIInput;
+using ECommons.Throttlers;
+using FFXIVClientStructs.FFXIV.Client.UI.Agent;
+using FFXIVClientStructs.FFXIV.Component.GUI;
+using ZoneTracker.ZoneTracker;
 
 namespace ZoneTracker.Windows;
 
@@ -45,6 +52,15 @@ public class MainWindow : Window, IDisposable
     internal static Vector2 ConvertWorldXZToMap(Vector2 coords, Lumina.Excel.Sheets.Map map) => Dalamud.Utility.MapUtil.WorldToMap(coords, map.OffsetX, map.OffsetY, map.SizeFactor);
     internal static List<IGameObject>? GetObjectsByObjectKind(ObjectKind objectKind) => [.. Svc.Objects.OrderBy(GetDistanceToPlayer).Where(o => o.ObjectKind == objectKind)];
 
+    public enum CharacterStatus
+    {
+        MOVING,
+        CHATTING,
+    }
+
+    public static bool awaitingChatFinish = false;
+
+    public CharacterStatus characterStatus { get; set; }
 
     public unsafe bool IsPartOfQuestOrImportant(Dalamud.Game.ClientState.Objects.Types.IGameObject gameObject)
     {
@@ -53,6 +69,10 @@ public class MainWindow : Window, IDisposable
 
     public List<IGameObject> knownNPCs = new List<IGameObject>();
     public List<string> talkedNames = new List<string>();
+
+
+    private float curTimer = 500;
+    private float baseTimer = 500;
     // We give this window a hidden ID using ##
     // So that the user will see "My Amazing Window" as window title,
     // but for ImGui the ID is "My Amazing Window##With a hidden ID"
@@ -79,7 +99,7 @@ public class MainWindow : Window, IDisposable
             if (gameObject == null || !gameObject.IsTargetable)
                 return;
 //            if (face)
-                //Plugin.OverrideCamera.Face(gameObject.Position);
+//                Plugin.OverrideCamera.Face(gameObject.Position);
             var gameObjectPointer = (FFXIVClientStructs.FFXIV.Client.Game.Object.GameObject*)gameObject.Address;
             TargetSystem.Instance()->InteractWithObject(gameObjectPointer, false);
         }
@@ -94,23 +114,48 @@ public class MainWindow : Window, IDisposable
         if (knownNPCs.Count > 0)
         {
             Chat.Instance.SendMessage($"/vnav moveto {knownNPCs[0].Position.X} {knownNPCs[0].Position.Y} {knownNPCs[0].Position.Z}");
+            characterStatus = CharacterStatus.MOVING;
         }
     }
 
+    public void StopMoving()
+    {
+        Chat.Instance.SendMessage($"/vnav stop");
+        
+    }
     public override void Draw()
     {
+        //        DialogueHandler.Tick();
+
+        if(characterStatus == CharacterStatus.MOVING)
+            ImGui.TextUnformatted($"MOVING");
+        else if (characterStatus == CharacterStatus.CHATTING)
+            ImGui.TextUnformatted($"CHATTING");
+
+        if (awaitingChatFinish)
+        {
+            ImGui.TextUnformatted($"Awaiting Chat Finish");
+            ImGui.TextUnformatted($"Remaining frames: {curTimer}");
+            curTimer -= 1;
+            if(curTimer < 0 )
+            {
+                curTimer = baseTimer;
+                awaitingChatFinish = false;
+            }
+            return;
+        }
 
         //update known character list
         List<IGameObject> obj = GetObjectsByObjectKind(ObjectKind.EventNpc);
         if (obj == null) return;
 
-
+        
         // Do not use .Text() or any other formatted function like TextWrapped(), or SetTooltip().
         // These expect formatting parameter if any part of the text contains a "%", which we can't
         // provide through our bindings, leading to a Crash to Desktop.
         // Replacements can be found in the ImGuiHelpers Class
         ImGui.TextUnformatted($"The random config bool is {Plugin.Configuration.SomePropertyToBeSavedAndWithADefault}");
-
+        
         if (ImGui.Button("Show Settings"))
         {
             Plugin.ToggleConfigUI();
@@ -141,13 +186,22 @@ public class MainWindow : Window, IDisposable
 
         if(knownNPCs.Count > 0)
         {
-            if (Vector3.Distance(Player.Position, knownNPCs[0].Position) < 3)
+            if (Vector3.Distance(Player.Position, knownNPCs[0].Position) < 3 && characterStatus == CharacterStatus.MOVING)
             {
+                characterStatus = CharacterStatus.CHATTING;
+                StopMoving();
                 InteractWithObject(knownNPCs[0], false);
+                awaitingChatFinish = true;
                 talkedNames.Add(knownNPCs[0].Name.ToString());
                 knownNPCs.Remove(knownNPCs[0]);
-                MoveToPoint();
             }
+        }
+
+        if(characterStatus == CharacterStatus.CHATTING && !awaitingChatFinish)
+        {
+            knownNPCs = knownNPCs.OrderBy(GetDistanceToPlayer).ToList();
+            MoveToPoint();
+
         }
 
         ImGui.Spacing();
