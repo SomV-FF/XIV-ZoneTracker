@@ -1,4 +1,43 @@
+using System;
+using System.Collections.Generic;
+using System.Numerics;
+using Dalamud.Interface.Utility;
+using Dalamud.Interface.Utility.Raii;
+using Dalamud.Interface.Windowing;
+using FFXIVClientStructs.FFXIV.Client.Game.Character;
+using FFXIVClientStructs.FFXIV.Client.UI;
+using ImGuiNET;
+using Lumina.Excel.Sheets;
+using ZoneTracker;
 using ICharacter = Dalamud.Game.ClientState.Objects.Types.ICharacter;
+
+
+
+using Dalamud.Game.ClientState.Conditions;
+using Dalamud.Game.ClientState.Objects.Types;
+using ECommons.DalamudServices;
+using ECommons.GameFunctions;
+using System.Collections.Generic;
+using System.Linq;
+using System.Numerics;
+using FFXIVClientStructs.FFXIV.Client.Game.Control;
+using System;
+using Dalamud.Game.ClientState.Objects.Enums;
+using ECommons;
+using FFXIVClientStructs.FFXIV.Component.GUI;
+using ECommons.Throttlers;
+using FFXIVClientStructs.FFXIV.Client.Game.UI;
+using ECommons.GameHelpers;
+using Dalamud.Game.ClientState.Objects.SubKinds;
+using ECommons.Automation;
+using System.Xml.Linq;
+using ECommons.UIHelpers;
+
+using ECommons.Automation.UIInput;
+using ECommons.Throttlers;
+using FFXIVClientStructs.FFXIV.Client.UI.Agent;
+using FFXIVClientStructs.FFXIV.Component.GUI;
+using ZoneTracker.ZoneTracker;
 
 namespace ZoneTracker.Windows;
 
@@ -28,19 +67,12 @@ public class MainWindow : Window, IDisposable
         return ((FFXIVClientStructs.FFXIV.Client.Game.Object.GameObject*)(gameObject as ICharacter).Address)->NamePlateIconId is not 0;
     }
 
-    public unsafe bool HasNamePlate(Dalamud.Game.ClientState.Objects.Types.IGameObject gameObject)
-    {
-        return ((FFXIVClientStructs.FFXIV.Client.Game.Object.GameObject*)(gameObject as ICharacter).Address)->NameString is not null;
-    }
-
     public List<IGameObject> knownNPCs = new List<IGameObject>();
-
     public List<string> talkedNames = new List<string>();
 
-    public List<string> excludedNames = new List<string> { "Delivery Moogle", "Junkmonger", "Mender" };
 
-    private float curTimer = 2000;
-    private float baseTimer = 2000;
+    private float curTimer = 500;
+    private float baseTimer = 500;
     // We give this window a hidden ID using ##
     // So that the user will see "My Amazing Window" as window title,
     // but for ImGui the ID is "My Amazing Window##With a hidden ID"
@@ -86,42 +118,6 @@ public class MainWindow : Window, IDisposable
         }
     }
 
-    public void CleanTargets()
-    {
-        for (int i = knownNPCs.Count; i > 0; i--)
-        {
-            if (!knownNPCs[i].IsValid())
-            {
-                knownNPCs.RemoveAt(i);
-                return;
-            }
-            if (talkedNames.Contains(knownNPCs[i].Name.ToString()))
-            {
-                knownNPCs.RemoveAt(i);
-                return;
-            }
-            if (knownNPCs[i].Name == null)
-            {
-                knownNPCs.RemoveAt(i);
-                return;
-            }
-           if (knownNPCs[i].Name.ToString() == "")
-            {
-                knownNPCs.RemoveAt(i);
-            }
-            //remove invisible characters
-            if (!(knownNPCs[i] as ICharacter).IsCharacterVisible())
-            {
-                knownNPCs.RemoveAt(i);
-            }
-            //remove untargetable characters
-            if (!knownNPCs[i].IsTargetable())
-            {   
-                knownNPCs.RemoveAt(i);
-            }
-        }
-    }
-
     public void StopMoving()
     {
         Chat.Instance.SendMessage($"/vnav stop");
@@ -131,15 +127,10 @@ public class MainWindow : Window, IDisposable
     {
         //        DialogueHandler.Tick();
 
-        ImGui.TextUnformatted("Current Character Status: ");
-
         if(characterStatus == CharacterStatus.MOVING)
             ImGui.TextUnformatted($"MOVING");
         else if (characterStatus == CharacterStatus.CHATTING)
             ImGui.TextUnformatted($"CHATTING");
-
-        ImGui.Spacing();
-        ImGui.Spacing();
 
         if (awaitingChatFinish)
         {
@@ -150,10 +141,6 @@ public class MainWindow : Window, IDisposable
             {
                 curTimer = baseTimer;
                 awaitingChatFinish = false;
-            }
-            if (ImGui.Button("skip wait"))
-            {
-                curTimer = 5;
             }
             return;
         }
@@ -167,17 +154,13 @@ public class MainWindow : Window, IDisposable
         // These expect formatting parameter if any part of the text contains a "%", which we can't
         // provide through our bindings, leading to a Crash to Desktop.
         // Replacements can be found in the ImGuiHelpers Class
-//        ImGui.TextUnformatted($"The random config bool is {Plugin.Configuration.SomePropertyToBeSavedAndWithADefault}");
-
-        ImGui.BeginTable("Talky_Main_Table", 2, ImGuiTableFlags.Borders);
-        ImGui.TableNextColumn();
-
-//        if (ImGui.Button("Show Settings"))
-//        {
-//            Plugin.ToggleConfigUI();
-//        }
-//        ImGui.TableNextColumn();
+        ImGui.TextUnformatted($"The random config bool is {Plugin.Configuration.SomePropertyToBeSavedAndWithADefault}");
         
+        if (ImGui.Button("Show Settings"))
+        {
+            Plugin.ToggleConfigUI();
+        }
+
         if(ImGui.Button("Interact with nearest character"))
         {
             foreach (IGameObject x in obj)
@@ -189,27 +172,17 @@ public class MainWindow : Window, IDisposable
                 }
             }
         }
-        ImGui.TableNextColumn();
 
         if (ImGui.Button("Clear known NPCs"))
         {
             knownNPCs.Clear();
             talkedNames.Clear();
         }
-        ImGui.TableNextColumn();
 
-        if (ImGui.Button("Move to next character"))
+        if (ImGui.Button("Move to point"))
         {
             MoveToPoint();
         }
-        ImGui.TableNextColumn();
-
-        if (ImGui.Button("Skip next NPC"))
-        {
-            talkedNames.Add(knownNPCs[0].Name.ToString());
-            knownNPCs.Remove(knownNPCs[0]);
-        }
-        ImGui.EndTable();
 
         if(knownNPCs.Count > 0)
         {
@@ -228,36 +201,20 @@ public class MainWindow : Window, IDisposable
         {
             knownNPCs = knownNPCs.OrderBy(GetDistanceToPlayer).ToList();
             MoveToPoint();
-        }
-        if(Player.Available)
-        ImGui.Spacing();
-        ImGui.Spacing();
-        ImGui.Spacing();
 
-        ImGui.TextUnformatted("Found characters:");
+        }
+
+        ImGui.Spacing();
+        
+
         using (var child = ImRaii.Child("CharacterList", new Vector2(500, 300), true))
         {
             foreach(IGameObject x in obj)
             {
                 if (!knownNPCs.Contains(x) && !talkedNames.Contains(x.Name.ToString()))
                 {
-                    bool excludedName = false;
-                    bool addName = true;
-                    if(x.Name != null)
-                    {
-                        if (!x.IsTargetable)
-                            continue;
-                        if (IsPartOfQuestOrImportant(x))
-                            continue;
-                        if (x.Name.ToString() == null || x.Name.ToString() == "")
-                            continue;
-                        if(excludedNames.Contains(x.Name.ToString()))
-                            continue;
-                        if (!(x as ICharacter).IsCharacterVisible())
-                            continue;
-
+                    if (x.IsTargetable && !IsPartOfQuestOrImportant(x))
                         knownNPCs.Add(x);
-                    }
                 }
             }
             foreach (IGameObject x in knownNPCs)
@@ -269,8 +226,6 @@ public class MainWindow : Window, IDisposable
 
         ImGui.Spacing();
 
-
-        CleanTargets();
         // Normally a BeginChild() would have to be followed by an unconditional EndChild(),
         // ImRaii takes care of this after the scope ends.
         // This works for all ImGui functions that require specific handling, examples are BeginTable() or Indent().
